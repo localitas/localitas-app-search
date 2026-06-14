@@ -1,0 +1,161 @@
+{{define "index.html"}}
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Search — Localitas</title>
+    <base href="{{.BasePath}}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        :root { --color-bg-base: #fcfbfe; --color-bg-elevated: #f0eef7; --color-text-primary: #1a1625; --color-text-secondary: #4a3f5c; --color-glass-base: rgba(255,255,255,0.75); --color-glass-border: rgba(139,117,169,0.35); --color-accent: #7d6b96; --shadow: 0 4px 16px rgba(139,117,169,0.08); }
+        [data-theme="dark"] { --color-bg-base: #120f1a; --color-bg-elevated: #221b2e; --color-text-primary: #e8e4f0; --color-text-secondary: #b3a8c8; --color-glass-base: rgba(37,31,53,0.85); --color-glass-border: rgba(184,164,212,0.15); --color-accent: #c5b3e0; --shadow: 0 6px 24px rgba(0,0,0,0.4); }
+        html, body { margin:0; padding:0; height:100%; overflow:hidden; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--color-bg-base); color: var(--color-text-primary); display:flex; flex-direction:column; }
+        .bg { position:fixed; inset:0; background: radial-gradient(circle at 10% 20%, var(--color-bg-elevated), var(--color-bg-base) 90%); z-index:-1; }
+
+        .toolbar { height:56px; min-height:56px; padding:0 1rem; display:flex; align-items:center; gap:0.75rem; border-bottom:1px solid var(--color-glass-border); background:var(--color-glass-base); }
+        .search-box { flex:1; display:flex; gap:0.5rem; }
+        .search-box input { flex:1; background:var(--color-glass-base); border:1px solid var(--color-glass-border); border-radius:0.5rem; padding:0.5rem 1rem; color:var(--color-text-primary); font-size:0.9375rem; outline:none; }
+        .search-box input:focus { border-color:var(--color-accent); }
+        .btn { padding:0.375rem 0.75rem; border-radius:0.5rem; border:1px solid var(--color-glass-border); background:var(--color-glass-base); color:var(--color-text-primary); cursor:pointer; font-size:0.8125rem; display:flex; align-items:center; gap:0.25rem; }
+        .btn:hover { border-color:var(--color-accent); }
+        .btn-primary { background:var(--color-accent); color:var(--color-bg-elevated); border-color:var(--color-accent); }
+
+        .content { flex:1; overflow-y:auto; padding:1rem; }
+        .columns { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; max-width:1400px; margin:0 auto; }
+        @media (max-width: 900px) { .columns { grid-template-columns:1fr; } }
+        .column { min-width:0; }
+        .column-header { font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--color-text-secondary); padding:0.5rem 0; margin-bottom:0.5rem; border-bottom:1px solid var(--color-glass-border); display:flex; align-items:center; gap:0.375rem; }
+        .column-badge { font-size:0.625rem; background:var(--color-accent); color:var(--color-bg-elevated); border-radius:999px; padding:0.0625rem 0.375rem; }
+        .result { padding:0.75rem; border:1px solid var(--color-glass-border); border-radius:0.5rem; margin-bottom:0.5rem; background:var(--color-glass-base); }
+        .result:hover { border-color:var(--color-accent); }
+        .result-title { font-size:0.875rem; font-weight:500; margin-bottom:0.25rem; }
+        .result-title a { color:var(--color-accent); text-decoration:none; }
+        .result-title a:hover { text-decoration:underline; }
+        .result-url { font-size:0.6875rem; color:var(--color-text-secondary); margin-bottom:0.25rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .result-snippet { font-size:0.8125rem; color:var(--color-text-secondary); line-height:1.4; }
+        .empty { text-align:center; padding:4rem 2rem; color:var(--color-text-secondary); }
+        .spinner { display:inline-block; width:20px; height:20px; border:2px solid var(--color-glass-border); border-top-color:var(--color-accent); border-radius:50%; animation:spin 0.6s linear infinite; }
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+        .error-list { font-size:0.75rem; color:var(--color-text-secondary); text-align:center; margin-top:0.5rem; }
+    </style>
+</head>
+<body>
+    <div class="bg"></div>
+
+    <div class="toolbar">
+        <div class="search-box">
+            <input type="text" id="search-input" placeholder="Search the web..." autofocus onkeydown="if(event.key==='Enter')doSearch()">
+            <button class="btn btn-primary" onclick="doSearch()">Search</button>
+            <a href="javascript:void(0)" onclick="showDocs()" class="btn" style="text-decoration:none;cursor:pointer;" title="Documentation"><i data-lucide="book-open" class="w-4 h-4" style="display:inline;"></i></a>
+        </div>
+    </div>
+
+    <div class="content" id="content">
+        <div class="empty" id="empty-state">
+            <i data-lucide="search" style="width:48px;height:48px;display:block;margin:0 auto 1rem;color:var(--color-accent);"></i>
+            <h2 style="font-size:1.125rem;font-weight:600;margin-bottom:0.5rem;">Web Search</h2>
+            <p>Search across DuckDuckGo, Brave, and Bing simultaneously</p>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const html = document.documentElement;
+            html.setAttribute('data-theme', localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+            window.addEventListener('message', e => { if (e.data && e.data.type === 'theme-change') html.setAttribute('data-theme', e.data.theme); });
+        })();
+
+        document.addEventListener('DOMContentLoaded', function() {
+            lucide.createIcons();
+            if (new URLSearchParams(window.location.search).get('docs') === 'true') showDocs();
+        });
+
+        function showDocs() {
+            document.getElementById('content').innerHTML = '<div style="padding:1rem;color:var(--color-text-secondary);">Loading documentation...</div>';
+            fetch('/apps/search/help?format=html')
+            .then(function(r) { return r.text(); })
+            .then(function(html) {
+                document.getElementById('content').innerHTML = '<div style="display:flex;justify-content:center;height:100%;">' + html + '</div>';
+                lucide.createIcons();
+            });
+        }
+
+        function helpShowSwagger() {
+            var w = document.getElementById('help-wrapper');
+            if (!w) return;
+            var swaggerUrl = w.dataset.swaggerUrl;
+            w.innerHTML = '<div style="display:flex;flex-direction:column;flex:1;min-height:0;">'
+                + '<div style="padding:0.5rem 1rem;border-bottom:1px solid var(--color-glass-border);display:flex;align-items:center;gap:0.75rem;">'
+                + '<a onclick="showDocs()" style="color:var(--color-accent);cursor:pointer;font-size:0.8125rem;text-decoration:none;">\u2190 Back to docs</a>'
+                + '<span style="font-size:0.8125rem;font-weight:500;color:var(--color-text-primary);">API Documentation</span></div>'
+                + '<iframe src="' + swaggerUrl + '" style="flex:1;border:none;width:100%;"></iframe></div>';
+        }
+
+        async function doSearch() {
+            const q = document.getElementById('search-input').value.trim();
+            if (!q) return;
+            const content = document.getElementById('content');
+            content.innerHTML = '<div class="empty"><div class="spinner"></div><p style="margin-top:1rem;">Searching...</p></div>';
+
+            if (window.parent !== window) window.parent.postMessage({ type: 'localitas-navigate', search: '?q=' + encodeURIComponent(q) }, '*');
+
+            try {
+                const resp = await fetch('api/search?q=' + encodeURIComponent(q));
+                const data = await resp.json();
+                renderResults(data);
+            } catch(e) {
+                content.innerHTML = '<div class="empty"><p>Search failed: ' + esc(e.message) + '</p></div>';
+            }
+        }
+
+        function renderResults(data) {
+            const content = document.getElementById('content');
+            const engines = [
+                { key: 'duckduckgo', label: 'DuckDuckGo', icon: '🦆' },
+                { key: 'brave', label: 'Brave', icon: '🦁' },
+                { key: 'bing', label: 'Bing', icon: '🔍' },
+            ];
+
+            let html = '<div class="columns">';
+            for (const eng of engines) {
+                const results = data[eng.key] || [];
+                html += '<div class="column">';
+                html += '<div class="column-header">' + eng.icon + ' ' + eng.label + ' <span class="column-badge">' + results.length + '</span></div>';
+                if (results.length === 0) {
+                    html += '<div style="padding:1rem;color:var(--color-text-secondary);font-size:0.8125rem;">No results</div>';
+                } else {
+                    for (const r of results) {
+                        const domain = getDomain(r.url);
+                        html += '<div class="result">' +
+                            '<div class="result-title"><a href="' + esc(r.url) + '" target="_blank" rel="noopener">' + esc(r.title) + '</a></div>' +
+                            '<div class="result-url">' + esc(domain) + '</div>' +
+                            (r.snippet ? '<div class="result-snippet">' + esc(r.snippet) + '</div>' : '') +
+                            '</div>';
+                    }
+                }
+                html += '</div>';
+            }
+            html += '</div>';
+
+            if (data.errors && data.errors.length > 0) {
+                html += '<div class="error-list">' + data.errors.map(e => esc(e)).join(' · ') + '</div>';
+            }
+
+            content.innerHTML = html;
+        }
+
+        function getDomain(url) {
+            try { return new URL(url).hostname; } catch(e) { return url; }
+        }
+
+        function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+        const urlQ = new URLSearchParams(window.location.search).get('q');
+        if (urlQ) { document.getElementById('search-input').value = urlQ; setTimeout(doSearch, 300); }
+    </script>
+</body>
+</html>
+{{end}}
