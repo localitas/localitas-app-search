@@ -1,6 +1,7 @@
 services:
   web:
     image: ghcr.io/localitas/localitas-app-search:latest
+    command: ["serve", "--listen", ":8000", "--base-path", "/apps/ext/search/"]
     ports:
       - "${APP_PORT:-9209}:8000"
     environment:
