@@ -2,7 +2,6 @@ package search
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/grandcat/zeroconf"
@@ -27,6 +26,6 @@ func BroadcastMDNS(port int, name string) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("mDNS broadcasting %s on port %d", name, port)
+	logger.Info("broadcasting mDNS", "name", name, "port", port)
 	return func() { server.Shutdown() }, nil
 }

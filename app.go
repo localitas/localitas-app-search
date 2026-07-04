@@ -2,9 +2,11 @@ package search
 
 import (
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 )
+
+var logger = slog.Default().With("component", "search")
 
 type App struct {
 	Searcher *Searcher
@@ -24,7 +26,7 @@ func New(basePath string) *App {
 func (a *App) handleIndex(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFS(TemplatesFS, "templates/index.html")
 	if err != nil {
-		log.Printf("search index template error: %v", err)
+		logger.Error("index template error", "error", err)
 		http.Error(w, "template error", http.StatusInternalServerError)
 		return
 	}
