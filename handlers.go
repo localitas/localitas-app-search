@@ -1,9 +1,9 @@
 package search
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
+
+	"github.com/localitas/localitas-go/httputil"
 )
 
 type handler struct {
@@ -13,21 +13,17 @@ type handler struct {
 func (h *handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	if q == "" {
-		writeErr(w, http.StatusBadRequest, "q is required")
+		writeErr(w, r, http.StatusBadRequest, "q is required")
 		return
 	}
 	results := h.searcher.SearchAll(r.Context(), q)
-	writeJSON(w, http.StatusOK, results)
+	writeJSON(w, r, http.StatusOK, results)
 }
 
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+func writeJSON(w http.ResponseWriter, r *http.Request, status int, v interface{}) {
+	httputil.WriteResponse(w, r, status, v)
 }
 
-func writeErr(w http.ResponseWriter, status int, format string, args ...interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf(format, args...)})
+func writeErr(w http.ResponseWriter, r *http.Request, status int, format string, args ...interface{}) {
+	httputil.WriteError(w, r, status, format, args...)
 }
