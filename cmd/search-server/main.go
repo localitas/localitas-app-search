@@ -24,7 +24,7 @@ func main() {
 	app := &cli.Command{
 		Name:    "search-server",
 		Usage:   "search app server",
-		Version: version,
+		Version: version + " (" + commit + ")",
 		Commands: []*cli.Command{
 			serveCommand(),
 		},
