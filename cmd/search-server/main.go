@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	search "github.com/localitas/localitas-app-search"
+	"github.com/localitas/localitas-go"
 	"github.com/urfave/cli/v3"
 )
 
@@ -19,6 +20,13 @@ var (
 	version = "dev"
 	commit  = "unknown"
 )
+
+func envOrFileToken() string {
+	if t := os.Getenv("LOCALITAS_API_TOKEN"); t != "" {
+		return t
+	}
+	return client.DefaultToken()
+}
 
 func main() {
 	app := &cli.Command{
@@ -45,14 +53,25 @@ func serveCommand() *cli.Command {
 		Usage: "Start the server",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "listen", Value: ":0", Usage: "listen address"},
+			&cli.StringFlag{Name: "core-url", Value: client.DefaultCoreURL(), Usage: "base URL of the Localitas core API"},
 			&cli.StringFlag{Name: "base-path", Value: "/", Usage: "URL prefix for <base href>"},
+			&cli.StringFlag{Name: "token", Value: envOrFileToken(), Usage: "bearer token for API calls"},
 		},
 		Action: serveAction,
 	}
 }
 
+func newClient(cmd *cli.Command) *client.Client {
+	c := client.New(cmd.String("core-url"))
+	if t := cmd.String("token"); t != "" {
+		c = c.WithToken(t)
+	}
+	return c
+}
+
 func serveAction(ctx context.Context, cmd *cli.Command) error {
 	basePath := cmd.String("base-path")
+	c := newClient(cmd)
 
 	a := search.New(basePath)
 	mux := http.NewServeMux()
@@ -66,17 +85,14 @@ func serveAction(ctx context.Context, cmd *cli.Command) error {
 	addr := ln.Addr().(*net.TCPAddr)
 	fmt.Printf("search-server listening on http://localhost:%d\n", addr.Port)
 
-	shutdown, err := search.BroadcastMDNS(addr.Port, search.DefaultHealth.Name)
-	if err != nil {
-		slog.Warn("mDNS broadcast failed", "error", err)
-	}
+	announcement := c.Announce(ln)
 
 	go func() {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 		<-sig
-		if shutdown != nil {
-			shutdown()
+		if err := announcement.Withdraw(); err != nil {
+			slog.Warn("withdraw from core failed", "error", err)
 		}
 		os.Exit(0)
 	}()
