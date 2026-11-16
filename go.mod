@@ -7,7 +7,7 @@ require (
 	github.com/urfave/cli/v3 v3.9.1
 )
 
-replace github.com/localitas/localitas-go => /Users/didipkerabat/localitas-go
+replace github.com/localitas/localitas-go => ../localitas-go
 
 require (
 	github.com/BurntSushi/toml v1.4.1-0.20240526193622-a339e1f7089c // indirect
