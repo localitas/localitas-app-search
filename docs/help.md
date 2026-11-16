@@ -50,55 +50,68 @@ The app uses standard HTTP clients with reasonable timeouts. Avoid sending exces
 
 ## Build & Deploy
 
+Run these in the app's repository, `~/localitas-app-search`.
+
 ### Version
 
 ```bash
-./search-server --version
+bin/search-server --version
 ```
 
 ### Build from source
 
 ```bash
-# Development (native)
-cd apps/search && go build -o bin/search-server ./cmd/search-server
+# Native binary
+go build -o bin/search-server ./cmd/search-server
 
-# Cross-compile for Linux
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-s -w" -trimpath -o bin/search-server-linux-amd64 ./cmd/search-server
+# Native binary plus the Linux amd64 binary the Docker image is built from (search-server-linux-amd64)
+make build-linux
 ```
+
+`make lint` runs gofmt and go vet; `make test` runs them and then the tests. `make build` runs only the lint step.
+
+### Run natively
+
+```bash
+make start   # writes the launchd service com.localitas.app.search for bin/search-server and loads it on port 9209
+make stop
+make logs    # follows ~/.localitas/logs/search/stdout.log
+```
+
+The app announces itself to core when it starts, and core serves it at `/apps/ext/search/`.
 
 ### Docker
 
-Build a Docker image directly from the binary:
-
 ```bash
-# Default base image (debian:12-slim)
-./search-server docker-build
-
-# Custom base image
-./search-server docker-build --base ubuntu:24.04
-
-# Custom Dockerfile
-./search-server docker-build --dockerfile ./my.Dockerfile
-
-# Tag and push to registry
-./search-server docker-build --tag ghcr.io/localitas/search:latest --push
+make build-docker   # builds the Linux binary and the search:latest image
+make start-docker   # runs container "search" on port 9209, labelled localitas.app=true
+make stop-docker
+make logs-docker
 ```
 
-The `docker-build` command requires a Linux amd64 binary in the same directory. Run `make deploy-build` from the project root first.
+Core registers containers labelled `localitas.app=true` once Docker reports them healthy.
+
+### Publish
+
+```bash
+# Run the tests, build the image, push ghcr.io/localitas/localitas-app-search:latest and :<VERSION>
+make docker-push
+
+# Build dist/search-server-darwin-arm64 and dist/search-server-darwin-amd64
+# and create GitHub release vX.Y.Z on this repository with them
+make release VERSION=vX.Y.Z
+```
+
+`VERSION` defaults to `git describe --tags --always --dirty`.
 
 ### Download
 
-Pre-built binaries are available on the [GitHub releases page](https://github.com/localitas/localitas/releases).
+Pre-built macOS binaries are on the [releases page](https://github.com/localitas/localitas-app-search/releases):
+- `search-server-darwin-arm64` (Apple Silicon)
+- `search-server-darwin-amd64` (Intel)
 
-Each release includes three builds per app:
-- `search-server-darwin-arm64` (macOS Apple Silicon)
-- `search-server-linux-amd64` (Linux x86_64)
-- `search-server-linux-arm64` (Linux ARM64)
+Every push to `main` publishes a release: `.github/workflows/release.yml` runs the tests and releases both binaries as `v0.1.<commit count>.<UTC timestamp>`. `make release` publishes one by hand.
 
 Download with the GitHub CLI:
 
-    gh release download --repo localitas/localitas --pattern 'search-server-*'
-
-### Release
-
-All app binaries are published to GitHub releases as part of `make deploy-upload-image`.
+    gh release download --repo localitas/localitas-app-search --pattern 'search-server-*'
