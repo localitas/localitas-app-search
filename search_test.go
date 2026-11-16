@@ -89,9 +89,8 @@ func TestParseBingHTML_Empty(t *testing.T) {
 	}
 }
 
-func TestNewSearcher_Defaults(t *testing.T) {
-	s := NewSearcher(nil)
-	if s.client == nil {
-		t.Error("expected non-nil client")
+func TestNewSearcher_UsesTheSDKClient(t *testing.T) {
+	if NewSearcher().up.Client != nil {
+		t.Error("the searcher brings its own client, without the SDK's stale-connection check")
 	}
 }

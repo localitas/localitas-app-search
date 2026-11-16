@@ -36,7 +36,7 @@ func TestHandleSwagger(t *testing.T) {
 }
 
 func TestHandleSearch_MissingQuery(t *testing.T) {
-	h := &handler{searcher: NewSearcher(nil)}
+	h := &handler{searcher: NewSearcher()}
 	w := httptest.NewRecorder()
 	h.handleSearch(w, httptest.NewRequest("GET", "/api/search", nil))
 	if w.Code != http.StatusBadRequest {

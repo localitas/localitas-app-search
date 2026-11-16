@@ -9,17 +9,31 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/localitas/localitas-go/httputil"
 )
 
+var (
+	duckDuckGoURL = "https://html.duckduckgo.com/html/"
+	braveURL      = "https://search.brave.com/search"
+	bingURL       = "https://www.bing.com/search"
+)
+
+// Searcher asks the search engines, again when one fails for a moment,
+// through the SDK's pooled client, which drops an idle connection a NAT
+// lost, with each failed try traced.
 type Searcher struct {
-	client *http.Client
+	up httputil.Upstream
 }
 
-func NewSearcher(client *http.Client) *Searcher {
-	if client == nil {
-		client = http.DefaultClient
-	}
-	return &Searcher{client: client}
+func NewSearcher() *Searcher {
+	return &Searcher{up: httputil.Upstream{
+		UserAgent: userAgent,
+		Header: http.Header{
+			"Accept":          {"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"},
+			"Accept-Language": {"en-US,en;q=0.9"},
+		},
+	}}
 }
 
 func (s *Searcher) SearchAll(ctx context.Context, query string) *SearchResults {
@@ -42,7 +56,7 @@ func (s *Searcher) SearchAll(ctx context.Context, query string) *SearchResults {
 		mu.Lock()
 		defer mu.Unlock()
 		if err != nil {
-			results.Errors = append(results.Errors, fmt.Sprintf("DuckDuckGo: %v", err))
+			results.Errors = append(results.Errors, err.Error())
 		} else {
 			results.DuckDuckGo = r
 		}
@@ -54,7 +68,7 @@ func (s *Searcher) SearchAll(ctx context.Context, query string) *SearchResults {
 		mu.Lock()
 		defer mu.Unlock()
 		if err != nil {
-			results.Errors = append(results.Errors, fmt.Sprintf("Brave: %v", err))
+			results.Errors = append(results.Errors, err.Error())
 		} else {
 			results.Brave = r
 		}
@@ -66,7 +80,7 @@ func (s *Searcher) SearchAll(ctx context.Context, query string) *SearchResults {
 		mu.Lock()
 		defer mu.Unlock()
 		if err != nil {
-			results.Errors = append(results.Errors, fmt.Sprintf("Bing: %v", err))
+			results.Errors = append(results.Errors, err.Error())
 		} else {
 			results.Bing = r
 		}
@@ -78,29 +92,22 @@ func (s *Searcher) SearchAll(ctx context.Context, query string) *SearchResults {
 
 const userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-func (s *Searcher) fetch(ctx context.Context, searchURL string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", searchURL, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-
-	resp, err := s.client.Do(req)
+// fetch GETs searchURL from engine; an error names the engine.
+func (s *Searcher) fetch(ctx context.Context, engine, searchURL string) (string, error) {
+	resp, err := s.up.Get(ctx, engine, searchURL)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", &httputil.UpstreamError{Service: engine, Err: fmt.Errorf("read: %w", err)}
 	}
 	return string(body), nil
 }
 
 func (s *Searcher) searchDuckDuckGo(ctx context.Context, query string) ([]SearchResult, error) {
-	body, err := s.fetch(ctx, fmt.Sprintf("https://html.duckduckgo.com/html/?q=%s", url.QueryEscape(query)))
+	body, err := s.fetch(ctx, "DuckDuckGo", duckDuckGoURL+"?q="+url.QueryEscape(query))
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +115,7 @@ func (s *Searcher) searchDuckDuckGo(ctx context.Context, query string) ([]Search
 }
 
 func (s *Searcher) searchBrave(ctx context.Context, query string) ([]SearchResult, error) {
-	body, err := s.fetch(ctx, fmt.Sprintf("https://search.brave.com/search?q=%s", url.QueryEscape(query)))
+	body, err := s.fetch(ctx, "Brave", braveURL+"?q="+url.QueryEscape(query))
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +123,7 @@ func (s *Searcher) searchBrave(ctx context.Context, query string) ([]SearchResul
 }
 
 func (s *Searcher) searchBing(ctx context.Context, query string) ([]SearchResult, error) {
-	body, err := s.fetch(ctx, fmt.Sprintf("https://www.bing.com/search?q=%s", url.QueryEscape(query)))
+	body, err := s.fetch(ctx, "Bing", bingURL+"?q="+url.QueryEscape(query))
 	if err != nil {
 		return nil, err
 	}
