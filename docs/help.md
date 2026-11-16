@@ -61,19 +61,19 @@ bin/search-server --version
 ### Build from source
 
 ```bash
-# Native binary
-go build -o bin/search-server ./cmd/search-server
+# Native binary (bin/search-server)
+make build
 
-# Native binary plus the Linux amd64 binary the Docker image is built from (search-server-linux-amd64)
+# Linux amd64 binary the Docker image is built from (search-server-linux-amd64)
 make build-linux
 ```
 
-`make lint` runs gofmt and go vet; `make test` runs them and then the tests. `make build` runs only the lint step.
+Both run `make lint` (gofmt and go vet) first; `make test` runs the lint step and then the tests.
 
 ### Run natively
 
 ```bash
-make start   # writes the launchd service com.localitas.app.search for bin/search-server and loads it on port 9209
+make start   # builds bin/search-server, writes the launchd service com.localitas.app.search for bin/search-server and loads it on port 9209
 make stop
 make logs    # follows ~/.localitas/logs/search/stdout.log
 ```
