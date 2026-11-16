@@ -18,7 +18,7 @@ func New(basePath string) *App {
 		basePath = "/"
 	}
 	return &App{
-		Searcher: NewSearcher(nil),
+		Searcher: NewSearcher(),
 		BasePath: basePath,
 	}
 }
